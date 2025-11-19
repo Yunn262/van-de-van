@@ -365,3 +365,162 @@ st.info('Este template fornece integração Binance completa via ccxt e uma base
 
 
 # End of file
+
+# --- IQ OPTION INTEGRAÇÃO COMPLETA ---
+from iqoptionapi.stable_api import IQ_Option
+
+# Config IQ Option
+IQ_EMAIL = "SEU_EMAIL"
+IQ_PASS = "SUA_SENHA"
+
+iq = IQ_Option(IQ_EMAIL, IQ_PASS)
+check, reason = iq.connect()
+
+if check:
+    print("✔ Conectado à IQ Option")
+else:
+    print("❌ Erro ao conectar:", reason)
+
+# Função para enviar ordem
+
+def enviar_ordem_iq(direcao, valor=1, par="EURUSD", duracao=1):
+    if direcao == "CALL":
+        iq.buy(valor, par, "call", duracao)
+    elif direcao == "PUT":
+        iq.buy(valor, par, "put", duracao)
+
+# --- SINAL + CRONÔMETRO ---
+import time
+
+def executar_sinal_com_cronometro(signal, delay):
+    if signal in ["CALL", "PUT"]:
+        for t in range(delay, 0, -1):
+            st.write(f"⏳ Entrada em {t}s...")
+            time.sleep(1)
+        st.success(f"🚀 Ordem enviada: {signal}")
+        enviar_ordem_iq(signal)
+    else:
+        st.info("Nenhum sinal para enviar agora.")
+
+# --- SETAS COLORIDAS NO GRÁFICO ---
+import plotly.graph_objects as go
+
+fig.add_trace(go.Scatter(
+    x=df.index,
+    y=df["close"],
+    mode="markers",
+    marker=dict(
+        size=14,
+        color=["green" if s=="CALL" else "red" if s=="PUT" else "gray" for s in df["signal"]],
+        symbol=["triangle-up" if s=="CALL" else "triangle-down" if s=="PUT" else "circle" for s in df["signal"]]
+    ),
+    name="Sinais"
+))
+
+
+# ======================= CONFIGURAÇÕES DO USUÁRIO =======================
+cronometro = st.sidebar.number_input("⏳ Tempo do cronômetro (segundos)", min_value=1, max_value=300, value=60)
+valor_entrada = st.sidebar.number_input("💰 Valor da entrada", min_value=1.0, value=1.0)
+par_moeda = st.sidebar.text_input("💱 Par de moedas", value="EURUSD")
+velas_operacao = st.sidebar.number_input("⏲️ Duração da operação (minutos)", min_value=1, max_value=15, value=1)
+modo = st.sidebar.radio("🟢 Modo", ["Demo", "Real"])
+
+# ======================= ENVIO DE ORDENS IQ OPTION =======================
+from iqoptionapi.stable_api import IQ_Option
+
+iq = IQ_Option(IQ_EMAIL, IQ_PASS)
+check, reason = iq.connect()
+
+if modo == "Demo":
+    iq.change_balance("PRACTICE")
+else:
+    iq.change_balance("REAL")
+
+# Função de envio
+def enviar_ordem_iq(direcao):
+    if direcao == "CALL":
+        iq.buy(valor_entrada, par_moeda, "call", velas_operacao)
+    elif direcao == "PUT":
+        iq.buy(valor_entrada, par_moeda, "put", velas_operacao)
+
+# ======================= CRONÔMETRO + ALARME =======================
+import time
+
+def executar_sinal(signal):
+    if signal not in ["CALL", "PUT"]:
+        st.info("Nenhum sinal válido no momento.")
+        return
+
+    for t in range(cronometro, 0, -1):
+        st.write(f"⏳ Entrada em {t}s...")
+        time.sleep(1)
+
+    st.success(f"🚀 Ordem enviada: {signal}")
+
+    # Alarme sonoro ao enviar o sinal
+    st.audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg")
+
+    enviar_ordem_iq(signal)
+
+
+# ======================= TELEGRAM CONFIG =======================
+import requests
+
+tg_token = st.sidebar.text_input("🤖 Telegram Bot Token", value="", type="password")
+tg_chat_id = st.sidebar.text_input("📨 Telegram Chat ID", value="")
+
+# Função para enviar mensagem no Telegram
+def enviar_telegram(msg):
+    if tg_token and tg_chat_id:
+        url = f"https://api.telegram.org/bot{tg_token}/sendMessage"
+        data = {"chat_id": tg_chat_id, "text": msg}
+        try:
+            requests.post(url, data=data)
+        except:
+            st.warning("⚠️ Não foi possível enviar a mensagem ao Telegram.")
+
+# Envio automático do sinal
+
+def enviar_sinal_telegram(signal):
+    if signal in ["CALL", "PUT"]:
+        enviar_telegram(f"📢 SINAL GERADO: {signal}")
+
+
+# ======================= MENU LATERAL (PÁGINAS) =======================
+pagina = st.sidebar.selectbox("📌 Navegação", ["Dashboard", "Configurações"])
+
+# ======================= PÁGINA DE CONFIGURAÇÕES =======================
+if pagina == "Configurações":
+    st.title("⚙️ Configurações do Bot")
+
+    st.subheader("⏳ Cronômetro")
+    st.write(f"Atual: **{cronometro}s**")
+
+    st.subheader("💰 Valor da Entrada")
+    st.write(f"Atual: **{valor_entrada} USD**")
+
+    st.subheader("💱 Par de Moedas")
+    st.write(f"Atual: **{par_moeda}**")
+
+    st.subheader("⏲️ Duração da Operação")
+    st.write(f"Atual: **{velas_operacao} minutos**")
+
+    st.subheader("🟢 Modo de Operação")
+    st.write(f"Atual: **{modo}**")
+
+    st.subheader("🤖 Telegram")
+    st.write(f"Token definido: {'✅' if tg_token else '❌'}")
+    st.write(f"Chat ID definido: {'✅' if tg_chat_id else '❌'}")
+
+# ======================= RESULTADO WIN/LOSS PARA TELEGRAM =======================
+
+def enviar_resultado_telegram(resultado, valor, par):
+    msg = f"📊 *Resultado da Operação:*
+💹 PAR: {par}
+💵 VALOR: {valor}
+🏆 RESULTADO: {resultado}"
+    enviar_telegram(msg)
+
+# Exemplo de uso após fechar operação:
+# enviar_resultado_telegram("WIN", valor_entrada, par_moeda)
+
